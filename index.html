@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人格特質測驗</title>
+    <!-- 載入 Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 使用 Inter 字體以獲得更好的現代感 */
+        body {
+            font-family: 'Inter', sans-serif;
+            /* 調整: 頁面背景改為淺灰色 */
+            background-color: #f3f4f6;
+        }
+        /* 隱藏原生 radio button */
+        .score-input {
+            display: none;
+        }
+        /* 選擇分數的標籤樣式 - 預設狀態 */
+        .score-label {
+            cursor: pointer;
+            /* 基礎工具類別 (尺寸, 圓形, 居中, 過渡效果) 將在 JS 的 BASE_UTILITIES 中定義，並在渲染時直接應用 */
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4 bg-gray-100">
+
+    <div id="quiz-container" class="bg-white p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-3xl">
+        
+        <!-- LOGO 標頭區塊 - 由於 LOGO 和分隔線都已移除，此區塊現在為空 -->
+        <div class="mb-8">
+            <!-- LOGO 位置清空 -->
+        </div>
+
+        <!-- 移除標題下方的分隔線，並調整間距 -->
+        <h1 class="text-4xl font-extrabold text-gray-800 mb-6 text-center">社會識 X 點滿計畫</h1>
+        <!-- 調整: 說明文字已更新，並移除「請根據您的實際情況...」該行文字 -->
+        <p class="text-xl font-medium text-gray-800 mb-8 text-center">來做個小測驗，看看你的個人特質與場域適配性吧!</p>
+
+
+        <form id="quiz-form">
+            <!-- 測驗問題將透過 JavaScript 動態生成於此 -->
+        </form>
+
+        <div class="mt-10 pt-6 border-t flex justify-center">
+            <button id="main-action-button" onclick="calculateResult()" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-xl transition duration-300 transform hover:scale-105 shadow-xl">
+                計算結果
+            </button>
+        </div>
+
+        <!-- 結果顯示區塊 -->
+        <div id="result-section" class="mt-12 p-6 bg-gray-50 rounded-xl border border-gray-200 hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">測驗結果分析</h2>
+            <div id="result-type" class="text-3xl font-extrabold text-center mb-4"></div>
+            <p id="result-description" class="text-gray-700 text-center leading-relaxed whitespace-pre-line"></p>
+            <!-- 增加 whitespace-pre-line 確保換行符號 (\n) 在結果區塊中有效 -->
+
+            <div class="mt-6 border-t pt-4 text-sm text-gray-500 flex justify-center space-x-8">
+                <p>A區分數: <span id="score-a" class="font-semibold text-gray-800">0</span></p>
+                <p>B區分數: <span id="score-b" class="font-semibold text-gray-800">0</span></p>
+                <p>C區分數: <span id="score-c" class="font-semibold text-gray-800">0</span></p>
+            </div>
+        </div>
+
+         <!-- 錯誤訊息區塊 -->
+        <div id="error-message" class="mt-6 p-4 bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg hidden text-center">
+            請回答所有七個問題才能進行計算！
+        </div>
+    </div>
+
+    <script>
+        // 固定的基礎類別：確保尺寸、圓形、定位和過渡效果
+        // 調整: 尺寸從 w-12 h-12 改為 w-10 h-10
+        const BASE_UTILITIES = 'flex items-center justify-center w-10 h-10 rounded-full border-2 transition duration-150 ease-in-out select-none';
+
+        // 預設外觀類別：顏色、邊框、hover效果
+        const DEFAULT_APPEARANCE = ['border-gray-400', 'text-gray-700', 'hover:bg-indigo-100', 'hover:border-indigo-500', 'hover:ring-2', 'hover:ring-indigo-300'];
+
+        // 選中外觀類別：填充色、陰影、縮放效果 (維持靛藍色以確保一致的選中視覺效果)
+        const SELECTED_APPEARANCE = ['bg-indigo-600', 'border-indigo-600', 'text-white', 'shadow-lg', 'scale-105'];
+
+        // 測驗數據結構 (已更新問題內容)
+        const quizData = [
+            { id: 'q1', block: 'A', text: '我喜歡與個案互動，直接了解他們的需求與想法。' },
+            { id: 'q2', block: 'A', text: '我偏好能立即看到成果與改變的工作。' },
+            { id: 'q3', block: 'A', text: '我喜歡直接協助個案處理生活相關的需求。' },
+            { id: 'q4', block: 'B', text: '我喜歡與不同部門或專業人員合作推動任務。' },
+            { id: 'q5', block: 'B', text: '我喜歡與不同部門或專業的人員合作，而非單打獨鬥。' },
+            { id: 'q6', block: 'B', text: '我喜歡管理和推動專案，而不僅僅專注於單一個案服務。' },
+            { id: 'q7', block: 'C', text: '現場服務與規劃工作我都喜歡，而且能夠自在地在兩者間切換角色。' }
+        ];
+
+        const form = document.getElementById('quiz-form');
+        const resultSection = document.getElementById('result-section');
+        const errorMessage = document.getElementById('error-message');
+        const scoreRange = [1, 2, 3, 4, 5];
+
+        function applyStyles(labelElement, isSelected) {
+            if (isSelected) {
+                // 移除預設外觀，套用選中外觀
+                labelElement.classList.remove(...DEFAULT_APPEARANCE);
+                labelElement.classList.add(...SELECTED_APPEARANCE);
+            } else {
+                // 移除選中外觀，套用預設外觀
+                labelElement.classList.remove(...SELECTED_APPEARANCE);
+                labelElement.classList.add(...DEFAULT_APPEARANCE);
+            }
+        }
+
+        // 核心修復：手動點擊處理函數，直接在 label 上觸發
+        function selectScoreManual(clickedLabel) {
+            const inputId = clickedLabel.getAttribute('for');
+            const radio = document.getElementById(inputId);
+
+            if (radio) {
+                radio.checked = true;
+                
+                const questionContainer = clickedLabel.closest('.mb-6');
+                const allLabels = questionContainer.querySelectorAll('.score-label');
+
+                allLabels.forEach(l => {
+                    applyStyles(l, false);
+                });
+
+                applyStyles(clickedLabel, true);
+            }
+        }
+
+        // 渲染測驗問題
+        function renderQuiz() {
+            let html = '';
+            let currentBlock = '';
+
+            quizData.forEach((q, index) => {
+                let blockBgClass = 'bg-white';
+                let blockTitleColor = 'text-gray-700';
+
+                if (q.block !== currentBlock) {
+                    currentBlock = q.block;
+                    
+                    // 區塊名稱變更為第一/二/三區塊
+                    const blockName = (q.block === 'A' ? '第一區塊 (A)' : q.block === 'B' ? '第二區塊 (B)' : '第三區塊 (C)');
+                    
+                    // 根據區塊設定標題顏色
+                    if (q.block === 'A') {
+                        blockTitleColor = 'text-orange-700';
+                    } else if (q.block === 'B') {
+                        blockTitleColor = 'text-blue-700';
+                    } else {
+                        blockTitleColor = 'text-gray-700';
+                    }
+                    
+                    html += `
+                        <h3 class="text-xl font-semibold ${blockTitleColor} mt-8 mb-4 border-b border-indigo-200 pb-2">${blockName}</h3>
+                    `;
+                }
+                
+                // 根據區塊設定卡片底色
+                if (q.block === 'A') {
+                    blockBgClass = 'bg-orange-50'; // 淡橘色
+                } else if (q.block === 'B') {
+                    blockBgClass = 'bg-blue-50'; // 淡藍色
+                } else if (q.block === 'C') {
+                    blockBgClass = 'bg-gray-100'; // 淺灰色
+                }
+
+
+                // 渲染單一問題
+                html += `
+                    <div class="mb-6 p-4 border border-gray-200 rounded-lg shadow-sm ${blockBgClass}">
+                        <p class="font-medium text-gray-800 mb-4">Q${index + 1}. ${q.text}</p>
+                        <div class="flex justify-between space-x-2">
+                            ${scoreRange.map(score => `
+                                <input type="radio" id="${q.id}-${score}" name="${q.id}" value="${score}" class="score-input" required>
+                                <label 
+                                    for="${q.id}-${score}" 
+                                    class="score-label ${BASE_UTILITIES} ${DEFAULT_APPEARANCE.join(' ')}"
+                                    onclick="selectScoreManual(this)" 
+                                >
+                                    ${score}
+                                </label>
+                            `).join('')}
+                        </div>
+                        <p class="text-xs text-gray-400 mt-2 flex justify-between">
+                            <span>1分：非常不同意</span>
+                            <span>5分：非常同意</span>
+                        </p>
+                    </div>
+                `;
+            });
+
+            form.innerHTML = html;
+        }
+
+        // 檢查所有問題是否都被回答 (與先前版本相同)
+        function allAnswered() {
+            return quizData.every(q => {
+                const radios = document.getElementsByName(q.id);
+                return Array.from(radios).some(radio => radio.checked);
+            });
+        }
+
+        // 根據分數判定人格特質類型 (已更新名稱和描述)
+        function classifyResult(scoreA, scoreB, scoreC) {
+            let result = {
+                type: '探索型 (Exploratory Type)',
+                description: '您的分數組合未滿足特定的分類標準，那也沒關係，表示您可能還在探索期，可以了解長照職涯地圖全貌，幫助您更清楚、更集中自己的方向。',
+                color: 'text-gray-500' 
+            };
+            
+            // 判斷跨域混和型的兩個條件
+            // 條件 A: A >= 12 且 B >= 12 且 C >= 3 (原條件)
+            const isMixedBalancedHigh = (scoreA >= 12 && scoreB >= 12 && scoreC >= 3);
+            
+            // 條件 B: (A >= 12 或 B >= 12) 且 |A - B| <= 2 且 C >= 3 (新條件)
+            const isMixedBalancedMedium = ((scoreA >= 12 || scoreB >= 12) && (Math.abs(scoreA - scoreB) <= 2) && (scoreC >= 3));
+
+            // 1. 跨域混和型 (Cross-domain Mixed Type)
+            if (isMixedBalancedHigh || isMixedBalancedMedium) { 
+                result = {
+                    type: '跨域混和型 (Cross-domain Mixed Type)',
+                    description: '您同時具備優秀的社交溝通能力和強大的管理組織能力。您是多才多藝、能夠適應多種角色的全面型人才。\n適合工作場域：**現場 × 管理雙刀流**，代表職類：**長照全職類**。',
+                    color: 'text-purple-600'
+                };
+            }
+            // 2. 社交型 (Social Type)
+            else if (scoreA >= 12 && (scoreA - scoreB) >= 3) {
+                result = {
+                    type: '社交型 (Social Type)',
+                    description: '你的社交特質突出，擅長建立關係、溝通協調，其中又可以分成以下2種：\n\n✦ 社交A型 ✦\n偏好直接接觸個案，從即時協助、解決具體需求與改善生活中獲得成就感。對流程與制度的共感及需求較低。適合工作場域：**實務 × 個案導向**，代表職類：**機構／日照／居家／家托照服員**。\n\n✦ 社交B型 ✦\n雖同樣在現場工作，但對流程與制度的接受度，較社交A型更高。喜歡有計畫但不僵化的工作方式，能在現場與管理工作間自在切換。適合工作場域：**實務 × 專案導向**，代表職類：**居服督導**。',
+                    color: 'text-green-600'
+                };
+            }
+            // 3. 管理型 (Managerial Type)
+            else if (scoreB >= 12 && (scoreB - scoreA) >= 3) {
+                result = {
+                    type: '管理型 (Managerial Type)',
+                    description: '你的管理特質顯著，善於規劃、有效組織資源達成目標，其中又可以分成以下2種：\n\n✦ 管理型-C ✦\n雖然喜歡工作現場，但還是想保有一點專業距離，傾向透過規劃、整合與協調的方式，幫助個案獲得適合的服務，而不是直接執行細節。適合工作場域：**管理 × 個案導向**，代表職類：**個管／照專／照專督導**\n\n✦ 管理型-D ✦\n可能已具備充分的現場經驗，能夠在現場與管理角色之間切換自如，同時做到溝通、協調、控管、規劃等，全面性的管理工作。適合工作場域：**管理 × 專案導向**，代表職類：**單位主管／單位負責人／機構負責人**',
+                    color: 'text-red-600'
+                };
+            }
+            // 4. 探索型
+            // (default result handles this)
+
+            return result;
+        }
+        
+        // 重置測驗狀態 (與先前版本相同)
+        function resetQuiz() {
+            document.querySelectorAll('.score-input').forEach(radio => { radio.checked = false; });
+            document.querySelectorAll('.score-label').forEach(l => {
+                applyStyles(l, false);
+            });
+            resultSection.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+
+            const button = document.getElementById('main-action-button');
+            button.textContent = '計算結果';
+            button.onclick = calculateResult;
+            document.getElementById('quiz-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+
+        // 核心計算和結果顯示函數 (與先前版本相同)
+        function calculateResult() {
+            errorMessage.classList.add('hidden');
+            resultSection.classList.add('hidden');
+            
+            const button = document.getElementById('main-action-button');
+
+            if (!allAnswered()) {
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+
+            let scoreA = 0;
+            let scoreB = 0;
+            let scoreC = 0;
+
+            quizData.forEach(q => {
+                const selected = document.querySelector(`input[name="${q.id}"]:checked`);
+                const score = parseInt(selected.value);
+
+                if (q.block === 'A') {
+                    scoreA += score;
+                } else if (q.block === 'B') {
+                    scoreB += score;
+                } else if (q.block === 'C') {
+                    scoreC += score;
+                }
+            });
+
+            const finalResult = classifyResult(scoreA, scoreB, scoreC);
+
+            document.getElementById('score-a').textContent = scoreA;
+            document.getElementById('score-b').textContent = scoreB;
+            document.getElementById('score-c').textContent = scoreC;
+
+            const resultTypeElement = document.getElementById('result-type');
+            resultTypeElement.textContent = finalResult.type;
+            resultTypeElement.className = `text-3xl font-extrabold text-center mb-4 ${finalResult.color}`;
+
+            // 設置結果描述，由於使用了換行符號 (\n)，我們需要在 HTML 中加入 whitespace-pre-line 才能正確顯示換行
+            document.getElementById('result-description').innerHTML = finalResult.description.replace(/\n/g, '<br>');
+            
+            resultSection.classList.remove('hidden');
+
+            button.textContent = '再測一次';
+            button.onclick = resetQuiz;
+
+            resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // 頁面載入完成後，渲染測驗
+        document.addEventListener('DOMContentLoaded', () => {
+            renderQuiz();
+        });
+    </script>
+</body>
+</html>
